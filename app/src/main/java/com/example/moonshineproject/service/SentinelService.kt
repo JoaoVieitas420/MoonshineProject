@@ -8,6 +8,7 @@ import android.app.Service
 import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
+import android.media.RingtoneManager
 import android.media.session.MediaSessionManager
 import android.media.session.PlaybackState
 import android.os.Build
@@ -95,14 +96,7 @@ class SentinelService : Service() {
         reminderJob = serviceScope.launch {
             delay(settings.reminderMinutes * 60_000L)
             if (!isSleeping) {
-                // Mostra o overlay por cima da media
-                val overlayIntent = Intent(
-                    this@SentinelService,
-                    com.example.moonshineproject.overlay.ReminderOverlayService::class.java
-                ).apply {
-                    action = com.example.moonshineproject.overlay.ReminderOverlayService.ACTION_SHOW
-                }
-                startService(overlayIntent)
+                showReminderNotification()
 
                 SentinelStatusStore.update(
                     SentinelUiStatus(
@@ -196,7 +190,47 @@ class SentinelService : Service() {
         stopForeground(STOP_FOREGROUND_REMOVE)
         stopSelf()
     }
+    private fun showReminderNotification() {
+        val manager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
 
+        val soundUri = RingtoneManager.getDefaultUri(RingtoneManager.TYPE_ALARM)
+        val audioAttributes = android.media.AudioAttributes.Builder()
+            .setUsage(android.media.AudioAttributes.USAGE_ALARM)
+            .build()
+
+        val reminderChannel = NotificationChannel(
+            REMINDER_CHANNEL_ID,
+            "Lembrete de sono",
+            NotificationManager.IMPORTANCE_HIGH
+        ).apply {
+            setSound(soundUri, audioAttributes)
+            enableVibration(true)
+            vibrationPattern = longArrayOf(0, 500, 200, 500)
+        }
+        manager.createNotificationChannel(reminderChannel)
+
+        val fullScreenIntent = Intent(this, com.example.moonshineproject.ui.ReminderActivity::class.java).apply {
+            flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
+        }
+        val fullScreenPendingIntent = PendingIntent.getActivity(
+            this, 200, fullScreenIntent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        )
+
+        val notification = NotificationCompat.Builder(this, REMINDER_CHANNEL_ID)
+            .setSmallIcon(R.drawable.ic_launcher_foreground)
+            .setContentTitle("🌙 Hora de descansar")
+            .setContentText("Já passaram ${prefs.loadSettings().reminderMinutes} minutos de media.")
+            .setPriority(NotificationCompat.PRIORITY_HIGH)
+            .setCategory(NotificationCompat.CATEGORY_ALARM)
+            .setFullScreenIntent(fullScreenPendingIntent, true)
+            .setSound(soundUri)
+            .setVibrate(longArrayOf(0, 500, 200, 500))
+            .setAutoCancel(true)
+            .build()
+
+        manager.notify(REMINDER_NOTIFICATION_ID, notification)
+    }
     private fun pauseMediaPlayback() {
         runCatching {
             val mediaSessionManager = getSystemService(Context.MEDIA_SESSION_SERVICE) as MediaSessionManager
@@ -267,6 +301,8 @@ class SentinelService : Service() {
         private const val CHANNEL_ID = "moonshine_sentinel_channel"
         private const val NOTIFICATION_ID = 8711
 
+        private const val REMINDER_CHANNEL_ID = "moonshine_reminder_channel"
+        private const val REMINDER_NOTIFICATION_ID = 8712
         const val ACTION_START = "com.example.moonshineproject.START_SENTINEL"
         const val ACTION_STOP = "com.example.moonshineproject.STOP_SENTINEL"
     }

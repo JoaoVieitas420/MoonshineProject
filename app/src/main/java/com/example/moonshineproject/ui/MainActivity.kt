@@ -56,7 +56,8 @@ class MainActivity : ComponentActivity() {
 @Composable
 private fun MoonshineNavigation(
     onboardingCompleted: Boolean,
-    onOnboardingDone: () -> Unit
+    onOnboardingDone: () -> Unit,
+    onOnboardingSkipped: () -> Unit = {}
 ) {
     val navController = rememberNavController()
     val navBackStackEntry by navController.currentBackStackEntryAsState()
@@ -113,6 +114,12 @@ private fun MoonshineNavigation(
                 OnboardingScreen(
                     onFinish = {
                         onOnboardingDone()
+                        navController.navigate("home") {
+                            popUpTo("onboarding") { inclusive = true }
+                        }
+                    },
+                    onSkip = {
+                        // NÃO chama onOnboardingDone() — volta a aparecer na próxima abertura
                         navController.navigate("home") {
                             popUpTo("onboarding") { inclusive = true }
                         }
